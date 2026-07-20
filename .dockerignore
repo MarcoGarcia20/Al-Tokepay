@@ -1,0 +1,13 @@
+.git
+.gitignore
+.env
+.env.local
+.env.*.local
+node_modules/
+dist/
+.vscode/
+.idea/
+*.md
+.gitkeep
+**/__pycache__/
+**/.DS_Store
