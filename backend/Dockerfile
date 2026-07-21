@@ -1,4 +1,4 @@
-FROM php:8.3-cli
+FROM php:8.4-cli
 
 RUN apt-get update && apt-get install -y \
     git \
@@ -8,12 +8,14 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libzip-dev \
     libicu-dev \
+    libpq-dev \
     unzip \
     dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
 RUN docker-php-ext-install \
     pdo_mysql \
+    pdo_pgsql \
     mbstring \
     bcmath \
     gd \
