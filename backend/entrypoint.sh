@@ -1,148 +1,139 @@
 #!/bin/sh
 set -e
 
-echo "=== 🚀 Iniciando contenedor de Laravel ==="
+echo "=== Iniciando entrypoint ==="
 
-# ========================
-# 1. Instalar dependencias
-# ========================
+# Instalar dependencias de Composer si no existen
 if [ ! -f "vendor/autoload.php" ]; then
-    echo "=== 📦 Instalando dependencias de Composer ==="
+    echo "=== Instalando dependencias de Composer ==="
     composer install --no-interaction --prefer-dist
 fi
 
-# ========================
-# 2. Crear .env si no existe
-# ========================
+# Crear .env si no existe
 if [ ! -f ".env" ]; then
-    echo "=== 📄 Creando .env desde .env.example ==="
+    echo "=== Creando .env desde .env.example ==="
     cp .env.example .env
 fi
 
-# ========================
-# 3. Inyectar variables de entorno en .env (sobrescribir)
-# ========================
-echo "=== 🛠️ Inyectando variables de entorno en .env ==="
-
-# Función auxiliar para sobrescribir o agregar
-set_env_var() {
-    key="$1"
-    value="$2"
-    if [ -z "$value" ]; then
-        echo "⚠️  Variable $key no definida, omitiendo."
-        return
-    fi
-    # Escapar caracteres especiales para sed (slash, punto, etc.) usando delimitador #
-    escaped_value=$(echo "$value" | sed -e 's/[\/&]/\\&/g')
-    if grep -q "^${key}=" .env; then
-        sed -i "s#^${key}=.*#${key}=${escaped_value}#" .env
-    else
-        echo "${key}=${value}" >> .env
-    fi
-}
+# --- Inyección forzada de variables de entorno ---
+echo "=== Inyectando variables de entorno en .env ==="
 
 # APP_KEY
 if [ -n "$APP_KEY" ]; then
-    set_env_var "APP_KEY" "$APP_KEY"
-else
-    echo "⚠️  APP_KEY no definida, se generará automáticamente."
+    if grep -q "^APP_KEY=" .env; then
+        sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
+    else
+        echo "APP_KEY=${APP_KEY}" >> .env
+    fi
 fi
 
 # Base de datos
 if [ -n "$DB_HOST" ]; then
-    set_env_var "DB_CONNECTION" "${DB_CONNECTION:-pgsql}"
-    set_env_var "DB_HOST" "$DB_HOST"
-    set_env_var "DB_PORT" "${DB_PORT:-5432}"
-    set_env_var "DB_DATABASE" "$DB_DATABASE"
-    set_env_var "DB_USERNAME" "$DB_USERNAME"
-    set_env_var "DB_PASSWORD" "$DB_PASSWORD"
+    # Forzar cada variable (si no existe la línea, se agrega)
+    sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=${DB_CONNECTION:-pgsql}|" .env
+    if ! grep -q "^DB_CONNECTION=" .env; then
+        echo "DB_CONNECTION=${DB_CONNECTION:-pgsql}" >> .env
+    fi
+
+    sed -i "s|^DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
+    if ! grep -q "^DB_HOST=" .env; then
+        echo "DB_HOST=${DB_HOST}" >> .env
+    fi
+
+    sed -i "s|^DB_PORT=.*|DB_PORT=${DB_PORT:-5432}|" .env
+    if ! grep -q "^DB_PORT=" .env; then
+        echo "DB_PORT=${DB_PORT:-5432}" >> .env
+    fi
+
+    sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
+    if ! grep -q "^DB_DATABASE=" .env; then
+        echo "DB_DATABASE=${DB_DATABASE}" >> .env
+    fi
+
+    sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
+    if ! grep -q "^DB_USERNAME=" .env; then
+        echo "DB_USERNAME=${DB_USERNAME}" >> .env
+    fi
+
+    sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
+    if ! grep -q "^DB_PASSWORD=" .env; then
+        echo "DB_PASSWORD=${DB_PASSWORD}" >> .env
+    fi
 else
-    echo "❌ ERROR: DB_HOST no está definida. Asegúrate de configurarla en Render."
+    echo "ERROR: DB_HOST no está definida. Asegúrate de configurarla en Render."
     exit 1
 fi
 
-# Otras variables
+# APP_URL
 if [ -n "$APP_URL" ]; then
-    set_env_var "APP_URL" "$APP_URL"
+    sed -i "s|^APP_URL=.*|APP_URL=${APP_URL}|" .env
+    if ! grep -q "^APP_URL=" .env; then
+        echo "APP_URL=${APP_URL}" >> .env
+    fi
 fi
-if [ -n "$APP_ENV" ]; then
-    set_env_var "APP_ENV" "$APP_ENV"
-fi
-if [ -n "$APP_DEBUG" ]; then
-    set_env_var "APP_DEBUG" "$APP_DEBUG"
-fi
+
+# SESSION_DRIVER (obligatorio para sesiones)
 if [ -n "$SESSION_DRIVER" ]; then
-    set_env_var "SESSION_DRIVER" "$SESSION_DRIVER"
-fi
-if [ -n "$SESSION_DOMAIN" ]; then
-    set_env_var "SESSION_DOMAIN" "$SESSION_DOMAIN"
-fi
-if [ -n "$SANCTUM_STATEFUL_DOMAINS" ]; then
-    set_env_var "SANCTUM_STATEFUL_DOMAINS" "$SANCTUM_STATEFUL_DOMAINS"
-fi
-
-# ========================
-# 4. Generar APP_KEY si no existe
-# ========================
-APP_KEY_IN_ENV=$(grep "^APP_KEY=" .env | cut -d '=' -f2)
-if [ -z "$APP_KEY_IN_ENV" ] || [ "$APP_KEY_IN_ENV" = "base64:..." ]; then
-    echo "=== 🔑 Generando APP_KEY con artisan ==="
-    php artisan key:generate --force
+    sed -i "s|^SESSION_DRIVER=.*|SESSION_DRIVER=${SESSION_DRIVER}|" .env
+    if ! grep -q "^SESSION_DRIVER=" .env; then
+        echo "SESSION_DRIVER=${SESSION_DRIVER}" >> .env
+    fi
+else
+    echo "SESSION_DRIVER=database" >> .env
 fi
 
-# ========================
-# 5. Verificar que las variables de BD están en .env
-# ========================
-echo "=== 📋 Contenido de .env (claves) ==="
-grep -E "^(APP_ENV|APP_DEBUG|APP_URL|APP_KEY|DB_|SESSION_DRIVER|SESSION_DOMAIN|SANCTUM_STATEFUL_DOMAINS)=" .env || echo "⚠️  No se encontraron variables."
+# Otras variables (opcionales)
+[ -n "$SESSION_DOMAIN" ] && sed -i "s|^SESSION_DOMAIN=.*|SESSION_DOMAIN=${SESSION_DOMAIN}|" .env
+[ -n "$SANCTUM_STATEFUL_DOMAINS" ] && sed -i "s|^SANCTUM_STATEFUL_DOMAINS=.*|SANCTUM_STATEFUL_DOMAINS=${SANCTUM_STATEFUL_DOMAINS}|" .env
 
-# ========================
-# 6. Esperar a que PostgreSQL esté disponible
-# ========================
-echo "=== ⏳ Esperando PostgreSQL en ${DB_HOST}:${DB_PORT} ==="
-RETRIES=30
-until [ $RETRIES -le 0 ] || php -r "new PDO('pgsql:host=${DB_HOST};port=${DB_PORT};dbname=${DB_DATABASE}', '${DB_USERNAME}', '${DB_PASSWORD}');" 2>/dev/null; do
-    echo "🔄 Esperando conexión a PostgreSQL... ($RETRIES intentos restantes)"
-    RETRIES=$((RETRIES-1))
-    sleep 3
+# --- Mostrar configuración (sin datos sensibles) ---
+echo "=== Configuración de .env ==="
+grep -E "^(APP_ENV|APP_DEBUG|APP_URL|DB_CONNECTION|DB_HOST|DB_PORT|DB_DATABASE|SESSION_DRIVER)" .env
+
+# --- Esperar a que PostgreSQL esté disponible ---
+echo "=== Esperando PostgreSQL en ${DB_HOST}:${DB_PORT} ==="
+MAX_RETRIES=30
+RETRY_COUNT=0
+until php -r "new PDO('pgsql:host=${DB_HOST};port=${DB_PORT};dbname=${DB_DATABASE}', '${DB_USERNAME}', '${DB_PASSWORD}');" 2>/dev/null; do
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+        echo "ERROR: No se pudo conectar a PostgreSQL después de $MAX_RETRIES intentos."
+        exit 1
+    fi
+    echo "Esperando conexión a PostgreSQL... (intento $RETRY_COUNT/$MAX_RETRIES)"
+    sleep 2
 done
+echo "PostgreSQL listo."
 
-if [ $RETRIES -le 0 ]; then
-    echo "❌ No se pudo conectar a PostgreSQL después de varios intentos."
-    exit 1
-fi
-echo "✅ PostgreSQL listo."
+# --- Migraciones ---
+echo "=== Ejecutando migraciones ==="
+php artisan migrate --force
 
-# ========================
-# 7. Verificar migraciones
-# ========================
-MIGRATED=$(php -r "
+# --- Verificar y crear usuario admin si no existe ---
+echo "=== Verificando usuario administrador ==="
+ADMIN_EXISTS=$(php -r "
 try {
     \$pdo = new PDO('pgsql:host=${DB_HOST};port=${DB_PORT};dbname=${DB_DATABASE}', '${DB_USERNAME}', '${DB_PASSWORD}');
-    \$stmt = \$pdo->query('SELECT COUNT(*) FROM migrations');
+    \$stmt = \$pdo->query(\"SELECT COUNT(*) FROM users WHERE email = 'admin@altokepay.com'\");
     echo \$stmt->fetchColumn();
 } catch (Exception \$e) {
     echo '0';
 }
 " 2>/dev/null || echo "0")
 
-if [ "$MIGRATED" = "0" ]; then
-    echo "=== 🗄️ Base de datos vacía — ejecutando migraciones y seeders ==="
-    php artisan migrate --seed --force
+if [ "$ADMIN_EXISTS" = "0" ]; then
+    echo "=== Usuario admin no encontrado. Ejecutando seeders ==="
+    php artisan db:seed --class=UserSeeder --force
+    # También ejecutar DatabaseSeeder si es necesario (pero UserSeeder ya crea el admin)
+    # php artisan db:seed --force
 else
-    echo "=== 🗄️ Base de datos ya migrada ($MIGRATED migraciones previas) — ejecutando migraciones pendientes ==="
-    php artisan migrate --force
+    echo "=== Usuario admin ya existe. Saltando seeders ==="
 fi
 
-# ========================
-# 8. Limpiar caché de configuración
-# ========================
-echo "=== 🧹 Limpiando caché ==="
+# --- Limpiar caché ---
 php artisan config:clear
 php artisan cache:clear
 
-# ========================
-# 9. Iniciar servidor
-# ========================
-echo "=== 🚀 Iniciando servidor en el puerto ${PORT:-8000} ==="
+# --- Iniciar servidor ---
+echo "=== Iniciando servidor en el puerto ${PORT:-8000} ==="
 exec php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
