@@ -1,6 +1,16 @@
 #!/bin/sh
 set -e
 
+echo "=== Variables de entorno (DB_*) ==="
+env | grep DB_
+echo "==================================="
+
+# Validar que DB_HOST esté definida
+if [ -z "$DB_HOST" ]; then
+    echo "ERROR: DB_HOST no está definida. Asegúrate de configurarla en Render."
+    exit 1
+fi
+
 # Instalar dependencias de Composer si no existen
 if [ ! -f "vendor/autoload.php" ]; then
     echo "=== Instalando dependencias de Composer ==="
@@ -20,18 +30,18 @@ if [ -z "$APP_KEY_EXISTS" ] || [ "$APP_KEY_EXISTS" = "base64:..." ]; then
     php artisan key:generate --force
 fi
 
-# Esperar a que PostgreSQL esté disponible
-echo "=== Esperando PostgreSQL ==="
-until php -r "new PDO('pgsql:host=${DB_HOST:-postgres};port=${DB_PORT:-5432};dbname=${DB_DATABASE:-altokepay}', '${DB_USERNAME:-postgres}', '${DB_PASSWORD:-}');" 2>/dev/null; do
+# Esperar a que PostgreSQL esté disponible (usando DB_HOST)
+echo "=== Esperando PostgreSQL en $DB_HOST:$DB_PORT ==="
+until php -r "new PDO('pgsql:host=${DB_HOST};port=${DB_PORT:-5432};dbname=${DB_DATABASE:-altokepay}', '${DB_USERNAME:-postgres}', '${DB_PASSWORD:-}');" 2>/dev/null; do
     echo "Esperando conexión a PostgreSQL..."
-    sleep 2
+    sleep 3
 done
 echo "PostgreSQL listo."
 
 # Verificar si la tabla de migraciones existe
 MIGRATED=$(php -r "
 try {
-    \$pdo = new PDO('pgsql:host=${DB_HOST:-postgres};port=${DB_PORT:-5432};dbname=${DB_DATABASE:-altokepay}', '${DB_USERNAME:-postgres}', '${DB_PASSWORD:-}');
+    \$pdo = new PDO('pgsql:host=${DB_HOST};port=${DB_PORT:-5432};dbname=${DB_DATABASE:-altokepay}', '${DB_USERNAME:-postgres}', '${DB_PASSWORD:-}');
     \$stmt = \$pdo->query('SELECT COUNT(*) FROM migrations');
     echo \$stmt->fetchColumn();
 } catch (Exception \$e) {
